@@ -1,0 +1,20 @@
+# données de clients et rendus : jamais dans le dépôt
+work/
+out/
+clients/*.json
+!clients/_template.json
+!clients/exemple-plancher.json
+
+# document de travail interne
+RECHERCHE.md
+
+# image sous droit d'auteur, usage local seulement
+templates/balgio-reel/stickers/stuart.png
+
+# environnement
+.env
+.venv/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store

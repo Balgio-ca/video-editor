@@ -1,0 +1,27 @@
+{
+ "_projet": {"client": "exemple-plancher", "mois": "2026-11"},
+
+ "promo-hiver": {
+  "rushs": ["C0040.MP4", "C0041.MP4"],
+  "motif": "Promo-Hiver"
+ },
+ "tournage-sous-tungstene": {
+  "rushs": ["C0011.MP4"],
+  "motif": "Gros-Deal",
+  "lut": "none",
+  "rotation": "ccw"
+ },
+ "entreposage-gratuit-en": {
+  "rushs": ["C0012.MP4"],
+  "motif": "Free-Storage",
+  "langue": "en"
+ },
+ "faq-1": {
+  "rushs": ["../faq/src/C0032.MP4"],
+  "motif": "FAQ-1"
+ },
+ "faq-2": {
+  "rushs": ["../faq/src/C0032.MP4"],
+  "motif": "FAQ-2"
+ }
+}

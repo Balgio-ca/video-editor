@@ -1,0 +1,34 @@
+{
+  "id": "slug-du-client",
+  "nom": "Nom du client",
+  "secteur": "ce que fait le client, en une ligne, pour guider le choix de b-roll",
+  "porte_parole": "Prénom, rôle",
+  "registre": "tutoiement ou vouvoiement",
+  "langue": "fr-CA",
+  "couleur_marque": "#000000",
+  "adresse": "",
+  "telephone": "",
+  "site": "",
+  "cta_defaut": "Phrase d'appel à l'action si le brief n'en donne pas.",
+  "mots_interdits": [
+    "exemples : meilleure, numéro un, garanti"
+  ],
+  "noms_propres": [
+    "noms, produits et lieux que Whisper doit reconnaître"
+  ],
+  "broll": {
+    "local": "02 - Assets/03 - Vidéos",
+    "pexels_permis": true,
+    "pexels_contexte": "mots-clés anglais qui décrivent le métier, pour Pexels"
+  },
+  "carte_fin": {
+    "type": "video",
+    "fichier": "chemin vers une carte de fin existante, ou vide"
+  },
+  "musique": {
+    "fichier": "chemin vers une boucle ou un morceau libre de droits, ou vide",
+    "gain_voix": 0.08,
+    "gain_fin": 0.55
+  },
+  "cta_court": "Appel à l'action court à l'écran, un *mot* en couleur"
+}

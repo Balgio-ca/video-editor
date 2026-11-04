@@ -1,0 +1,35 @@
+{
+  "id": "exemple-plancher",
+  "nom": "Planchers Exemple inc.",
+  "secteur": "magasin de planchers (bois franc, ingénierie, vinyle, stratifié) avec entrepôt sur place",
+  "porte_parole": "Alex, propriétaire",
+  "registre": "tutoiement",
+  "langue": "fr-CA",
+  "couleur_marque": "#E8792B",
+  "adresse": "123, rue Exemple, Laval",
+  "telephone": "450 555-0123",
+  "site": "planchers-exemple.ca",
+  "cta_defaut": "Passe nous voir au 123, rue Exemple à Laval.",
+  "mots_interdits": ["meilleur au Québec", "garanti à vie"],
+  "noms_propres": ["Planchers Exemple", "Laval", "Toucan", "vinyle SPC"],
+  "broll": {
+    "local": "work/exemple-plancher/assets/broll",
+    "pexels_permis": true,
+    "pexels_contexte": "hardwood flooring, flooring store, home renovation, floor installation"
+  },
+  "carte_fin": {
+    "type": "video",
+    "fichier": "work/exemple-plancher/assets/END-CARD.mp4"
+  },
+  "musique": {
+    "fichier": "",
+    "gain_voix": 0.08,
+    "gain_fin": 0.55
+  },
+  "cta_court": "Viens voir au *123, rue Exemple*, Laval",
+  "cta_court_en": "Come see us at *123 Exemple St*, Laval",
+  "carte_fin_en": {
+    "type": "video",
+    "fichier": "work/exemple-plancher/assets/END-CARD-EN.mp4"
+  }
+}

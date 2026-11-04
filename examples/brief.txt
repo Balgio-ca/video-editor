@@ -1,0 +1,6 @@
+Sujet : Foire aux questions en vrai ou faux, question 2 sur 7. Le caméraman pose la question hors champ, Alex répond face caméra dans l'entrepôt.
+Question : Est-ce que c'est vrai que l'ingénierie est plus dure que le vrai bois franc ? Faux.
+CONSIGNE STRICTE : garder UNIQUEMENT les mots 359 à 484 (extrait debut_mot=359, fin_mot=484). Le reste du transcript est d'autres questions ou du plateau.
+Le reel ouvre sur la question, puis la réponse. Accroche : la question en 6 à 10 mots, avec « vrai ou faux ».
+Ne coupe jamais un mot qui porte l'explication (« malheureusement », « parce que », « tout de suite ») : seulement les faux départs et les reprises.
+B-roll : quand Alex nomme un type de plancher, utiliser les photos du catalogue du client (local:site-...) ou les plans du magasin, jamais un plancher générique de Pexels.
