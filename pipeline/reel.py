@@ -31,9 +31,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from llm import complete_json  # noqa: E402
+from plateforme import commande_hyperframes, h264, outil, transcrire, MAC_ARM  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-VENV = ROOT / ".venv" / "bin"
 TEMPLATE_DIR = ROOT / "templates" / "balgio-reel"
 OUT_DIR = ROOT / "out"
 
@@ -201,7 +201,7 @@ def step_normalize(rush: Path, work: Path, rotation: str = "auto", lut: str = "a
     sh([
         "ffmpeg", "-v", "error", "-y", "-i", rush,
         "-vf", pre + "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30",
-        "-c:v", "h264_videotoolbox", "-b:v", "12M", "-profile:v", "high", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
+        *h264("12M"), "-profile:v", "high", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", out,
     ])
     return out
@@ -215,7 +215,7 @@ def step_cut(src: Path, work: Path, margin: float = 0.3, threshold: float = 0.04
         log("cut : déjà fait")
         return out
     sh([
-        VENV / "auto-editor", src, "--margin", f"{margin}s",
+        outil("auto-editor"), src, "--margin", f"{margin}s",
         "--edit", f"audio:threshold={threshold},mincut=0.5s,minclip=0.3s", "-o", out, "--no-open",
     ], stdout=subprocess.DEVNULL)
     return out
@@ -229,16 +229,10 @@ def step_transcribe(video: Path, work: Path, profile: dict) -> Path:
         return out
     wav = work / "audio16k.wav"
     sh(["ffmpeg", "-v", "error", "-y", "-i", video, "-vn", "-ac", "1", "-ar", "16000", wav])
-    import mlx_whisper  # importé ici pour garder les autres étapes légères
-
     lang = str(profile.get("langue", "fr"))[:2].lower()
     prompt = ("Vidéo québécoise. " if lang == "fr" else "Quebec business video. ") + ", ".join(profile.get("noms_propres", [])) + "."
-    r = mlx_whisper.transcribe(
-        str(wav), path_or_hf_repo="mlx-community/whisper-large-v3-turbo",
-        language=lang, word_timestamps=True, initial_prompt=prompt,
-        # sans ce réglage, Whisper peut sauter 20 s de parole après un passage flou (anecdote 2, 3 nov 2026)
-        condition_on_previous_text=False,
-    )
+    # condition_on_previous_text=False (dans transcrire) : sinon Whisper peut sauter 20 s de parole après un passage flou
+    r = transcrire(wav, lang, prompt)
     words = []
     ELIS = {"c", "d", "j", "l", "m", "n", "s", "t", "qu", "jusqu", "lorsqu", "puisqu", "quelqu"}
     raw = [w for seg in r["segments"] for w in seg.get("words", [])]
@@ -256,8 +250,7 @@ def step_transcribe(video: Path, work: Path, profile: dict) -> Path:
             if seg_env.size and float(np.mean(seg_env > 0.02)) > 0.25:
                 part = work / "_trou.wav"
                 sh(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-t", f"{b - a:.3f}", "-i", wav, part])
-                r2 = mlx_whisper.transcribe(str(part), path_or_hf_repo="mlx-community/whisper-large-v3-turbo",
-                                            language=lang, word_timestamps=True, initial_prompt=prompt, condition_on_previous_text=False)
+                r2 = transcrire(part, lang, prompt)
                 got = [dict(w, start=float(w["start"]) + a, end=float(w["end"]) + a) for sg in r2["segments"] for w in sg.get("words", [])]
                 log(f"transcribe : trou {a:.1f}-{b:.1f} s retranscrit, {len(got)} mots")
                 extra += got
@@ -549,7 +542,7 @@ def step_broll(edit_json: Path, words_json: Path, work: Path, profile: dict) -> 
                 "ffmpeg", "-v", "error", "-y", "-ss", f"{offset:.2f}", "-t", f"{dur + 0.5:.2f}", "-i", src,
                 "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30",
                 *(["-c:a", "aac", "-b:a", "128k", "-ar", "48000"] if has_audio else ["-an"]),
-                "-c:v", "h264_videotoolbox", "-b:v", "10M", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", clip,
+                *h264("10M"), "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", clip,
             ])
         result.append({"n": n, "start": round(start, 3), "duration": round(dur, 3),
                        "file": clip.name, "type": "video", "origin": origin, "query": query,
@@ -745,7 +738,7 @@ def grade_filter(video: Path, target: float = 118.0, sat: float = 1.08, contrast
         tmp = video.parent / "_grade_test.mp4"
         mid = max(0.0, probe(video)["duration"] / 2 - 1.5)
         sh(["ffmpeg", "-v", "error", "-y", "-ss", f"{mid:.2f}", "-t", "3", "-i", video, "-vf", filt(g),
-            "-c:v", "h264_videotoolbox", "-b:v", "4M", "-an", tmp], stdout=subprocess.DEVNULL)
+            *h264("4M"), "-an", tmp], stdout=subprocess.DEVNULL)
         return mean_luma(tmp, 0, 3)
 
     e = math.log(target / 255) / math.log(max(y, 1) / 255)
@@ -795,7 +788,7 @@ def assemble_talk(src: Path, segs: list[tuple[float, float]], out: Path, vf_grad
             prev = outn
         fc = fc.rstrip(";")
     sh(["ffmpeg", "-v", "error", "-y", "-i", src, "-filter_complex", fc, "-map", "[v]", "-map", "[a]",
-        "-r", "30", "-c:v", "h264_videotoolbox", "-b:v", "12M", "-pix_fmt", "yuv420p",
+        "-r", "30", *h264("12M"), "-pix_fmt", "yuv420p",
         "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", out])
     return probe(out)["duration"]
@@ -989,7 +982,7 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
         sh(["ffmpeg", "-v", "error", "-y", "-i", cut, "-i", aud, "-filter_complex",
             f"[0:v]trim=start={i0:.3f}:end={i1:.3f},setpts=(PTS-STARTPTS)*{D / (i1 - i0):.4f},{vf_talk}[v];"
             f"[1:a]aresample=48000,aformat=channel_layouts=stereo,volume={float(pre.get('gain', 1.0)):.2f},atrim=end={D:.3f},afade=t=out:st={max(0.0, D - 0.12):.3f}:d=0.12[a]",
-            "-map", "[v]", "-map", "[a]", "-t", f"{D:.3f}", "-r", "30", "-c:v", "h264_videotoolbox", "-b:v", "12M", "-pix_fmt", "yuv420p",
+            "-map", "[v]", "-map", "[a]", "-t", f"{D:.3f}", "-r", "30", *h264("12M"), "-pix_fmt", "yuv420p",
             "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709",
             "-c:a", "aac", "-b:a", "192k", "-ar", "48000", prev])
         lst = work / "_talk_parts.txt"
@@ -999,11 +992,9 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
         # sous-titres de la pré-ouverture : transcription du son fourni (mise en cache)
         pw = work / "preroll_words.json"
         if not pw.exists() or pw.stat().st_mtime < aud.stat().st_mtime:
-            import mlx_whisper
             wav = work / "_preroll16k.wav"
             sh(["ffmpeg", "-v", "error", "-y", "-i", aud, "-vn", "-ac", "1", "-ar", "16000", wav])
-            r = mlx_whisper.transcribe(str(wav), path_or_hf_repo="mlx-community/whisper-large-v3-turbo",
-                                       language=str(profile.get("langue", "fr"))[:2], word_timestamps=True)
+            r = transcrire(wav, str(profile.get("langue", "fr"))[:2])
             pw.write_text(json.dumps([{"text": w["word"].strip(), "start": w["start"], "end": w["end"]}
                                       for sg in r["segments"] for w in sg.get("words", [])], ensure_ascii=False))
         pws = json.loads(pw.read_text())
@@ -1278,8 +1269,8 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
         if vf_grade and b.get("type", "video") == "video" and str(b.get("origin", "")).startswith("local:"):
             graded = work / "broll" / b["file"].replace(".mp4", "_grade.mp4")
             if not graded.exists():
-                sh(["ffmpeg", "-v", "error", "-y", "-i", src, "-vf", vf_grade, "-c:a", "copy", "-c:v", "h264_videotoolbox",
-                    "-b:v", "10M", "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709",
+                sh(["ffmpeg", "-v", "error", "-y", "-i", src, "-vf", vf_grade, "-c:a", "copy", *h264("10M"),
+                    "-pix_fmt", "yuv420p", "-color_primaries", "bt709", "-color_trc", "bt709",
                     "-colorspace", "bt709", graded])
             src = graded
         name = link(src, b["file"])
@@ -1330,7 +1321,7 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
         if not ec_small.exists():
             sh(["ffmpeg", "-v", "error", "-y", "-i", endcard,
                 "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30",
-                "-an", "-c:v", "h264_videotoolbox", "-b:v", "10M", "-pix_fmt", "yuv420p",
+                "-an", *h264("10M"), "-pix_fmt", "yuv420p",
                 "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", ec_small])
         ec_dur = min(probe(ec_small)["duration"], 3.5)
         name = link(ec_small, "endcard.mp4")
@@ -1415,9 +1406,11 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
 def step_render(comp: Path, work: Path, profile: dict, title_slug: str, mois: str) -> Path:
     raw = work / "render_raw.mp4"
     env = dict(os.environ)
-    sh(["bash", "-lc",
-        f'source ~/.nvm/nvm.sh && nvm use 22 >/dev/null && cd "{comp}" && '
-        f'npx hyperframes render . -o "{raw}" --fps 30 --quality looks --sdr --gpu --quiet'], env=env)
+    # --gpu accélère le rendu sur Mac ; ailleurs il dépend du pilote, on le laisse à HF_GPU=1
+    gpu = " --gpu" if MAC_ARM or os.environ.get("HF_GPU") == "1" else ""
+    cmd, kw = commande_hyperframes(f'render . -o "{raw}" --fps 30 --quality looks --sdr{gpu} --quiet', comp)
+    log("$ hyperframes render")
+    subprocess.run(cmd, check=True, env=env, **kw)
     OUT_DIR.joinpath(profile["id"]).mkdir(parents=True, exist_ok=True)
     final = OUT_DIR / profile["id"] / f"{mois}_{title_slug}.mp4"
     if final.exists():

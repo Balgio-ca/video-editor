@@ -1,4 +1,6 @@
-mlx-whisper>=0.4.3
+# transcription : mlx-whisper sur Mac à puce Apple, faster-whisper ailleurs (Linux, Windows, Mac Intel)
+mlx-whisper>=0.4.3; sys_platform == "darwin" and platform_machine == "arm64"
+faster-whisper>=1.1; sys_platform != "darwin" or platform_machine != "arm64"
 auto-editor>=29.3
 requests>=2.32
 pillow>=11

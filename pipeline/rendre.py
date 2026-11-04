@@ -18,6 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import projet as P  # noqa: E402
+import plateforme  # noqa: E402,F401  (charge .env)
 
 ROOT = P.ROOT
 GARDE = re.compile(r"^\[reel\] (normalize|transcribe|edito|broll [0-9]+ : (étiré|raccourci)|compose|render)|Traceback|rror:")
@@ -33,7 +34,7 @@ def un(projet: str, slug: str, args) -> int:
         (w / "comp" / "index.html").unlink(missing_ok=True)
         for f in (ROOT / "out" / s["client"]).glob(f"{s['mois']}_{s['motif']}*"):
             f.unlink()
-    cmd = [str(ROOT / ".venv" / "bin" / "python"), str(ROOT / "pipeline" / "reel.py"),
+    cmd = [sys.executable, str(ROOT / "pipeline" / "reel.py"),
            "--client", s["client"], "--rush", *s["rushs"], "--work", str(w), "--mois", s["mois"],
            "--langue", s["langue"], "--lut", s["lut"], "--rotation", s["rotation"]]
     if (w / "brief.txt").exists():

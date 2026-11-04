@@ -44,11 +44,11 @@ with tempfile.TemporaryDirectory() as tmp:
     sheet.save(out, quality=85)
     print(out.relative_to(P.ROOT))
     if "--ecoute" in sys.argv:
-        import mlx_whisper
+        from plateforme import transcrire
 
         i = sys.argv.index("--ecoute")
         langue = sys.argv[i + 1] if len(sys.argv) > i + 1 else s["langue"]
         wav = f"{tmp}/ecoute.wav"
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", s["work"] / "talk.mp4", "-vn", "-ac", "1", "-ar", "16000", wav], check=True)
-        r = mlx_whisper.transcribe(wav, path_or_hf_repo="mlx-community/whisper-large-v3-turbo", language=langue)
+        r = transcrire(wav, langue, mots=False)
         print("ÉCOUTE :", r["text"].strip())

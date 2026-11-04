@@ -2,6 +2,8 @@
 Usage : pexels_candidats.py <dossier_sortie> "tag=requête" ["tag=requête" ...]
 Écrit <dossier>/_candidats.jpg (une rangée par requête, id et durée sur chaque vignette)."""
 import os, sys, pathlib, requests
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import plateforme  # noqa: E402,F401  (charge .env)
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
