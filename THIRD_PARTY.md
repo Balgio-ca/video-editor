@@ -13,5 +13,8 @@ qu'au code et aux fichiers écrits pour ce projet.
 | mlx-whisper, faster-whisper, auto-editor, requests, Pillow, NumPy, OpenCV | installés par `requirements.txt` | leurs licences respectives (MIT, Unlicense, Apache-2.0, HPND, BSD) |
 | Clips Pexels | téléchargés à l'usage, jamais versionnés | Licence Pexels (https://www.pexels.com/license/) |
 
+L'animation `docs/demo.gif` montre un tournage réel d'un commerce, reproduit avec son accord pour illustrer
+le projet. Elle n'est pas couverte par la licence du dépôt : ne pas la réutiliser ailleurs.
+
 Les autocollants `fleur-de-lys.svg` et `souris.svg` ont été dessinés pour ce projet. N'ajoutez dans
 `templates/balgio-reel/stickers/` que des images dont vous avez les droits.

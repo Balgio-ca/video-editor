@@ -11,6 +11,11 @@ Le pipeline est conçu pour être conduit par un agent de code (Claude Code, Cod
 vous décrivez ce que vous voulez en langage courant, l'agent lance le montage, le contrôle, puis
 retouche selon vos commentaires.
 
+<p align="center">
+  <img src="docs/demo.gif" alt="À gauche, un rush brut en S-Log non coupé ; à droite, le reel monté avec accroche, question en voix téléphone, sous-titres animés et verdict FAUX" width="540">
+</p>
+<p align="center"><sub>Un vrai tournage de commerce local : 10 minutes de rush S-Log devenues un reel vrai ou faux de 44 s.</sub></p>
+
 [![Licence : PolyForm Noncommercial](https://img.shields.io/badge/licence-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE)
 ![Plateformes](https://img.shields.io/badge/plateformes-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![Python](https://img.shields.io/badge/python-3.12-informational)
