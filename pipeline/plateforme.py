@@ -21,6 +21,10 @@ import sys
 from pathlib import Path
 
 WINDOWS = os.name == "nt"
+# sous Windows, Python lit les fichiers en cp1252 par défaut : on relance en mode UTF-8 (accents des JSON)
+if WINDOWS and not sys.flags.utf8_mode and os.environ.get("PYTHONUTF8") != "1":
+    os.environ["PYTHONUTF8"] = "1"
+    os.execv(sys.executable, [sys.executable, "-X", "utf8", *sys.argv])
 MAC_ARM = sys.platform == "darwin" and platform.machine() == "arm64"
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "large-v3-turbo")
 

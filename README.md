@@ -27,8 +27,13 @@ retouche selon vos commentaires.
 - **Sous-titres animés** : 1 à 3 mots, mot prononcé en couleur de marque, styles gros, encadré, cursive.
 - **B-roll** : clips et photos du client en priorité, Pexels en repli ; jamais un éclair de visage
   entre deux plans.
-- **Habillage** : accroche, verdicts plein écran (vrai / faux, red flag / green flag), voix hors champ
-  en effet téléphone, autocollants, intro sur jingle, carte de fin.
+- **Habillage** : accroche, cartes de titre, verdicts plein écran (vrai / faux, red flag / green flag),
+  voix hors champ en effet téléphone, autocollants, intro sur jingle, carte de fin générée depuis le
+  profil du client.
+- **Son** : musique avec ducking sous la voix, banque d'effets sonores et dossier pour les vôtres,
+  volume final réglable (-14 LUFS par défaut).
+- **Génération par IA** (facultatif) : voix off, effets sonores, musique et jingles par ElevenLabs ;
+  images et vidéos de b-roll par OpenAI ou Gemini quand aucun vrai plan ne convient.
 - **Couleur** : détection du S-Log3 et LUT vers Rec.709, étalonnage automatique de l'exposition.
 - **Bilingue** : français (Québec) et anglais.
 
@@ -119,11 +124,11 @@ Avec une carte NVIDIA, installer le dernier pilote et CUDA 12.
 ### Vérifier l'installation
 
 ```bash
-.venv/bin/python pipeline/reel.py --help
-ffmpeg -version
-node --version          # v22 ou plus
-npx hyperframes --version
+.venv/bin/python pipeline/diagnostic.py
 ```
+
+Le diagnostic vérifie FFmpeg et ses filtres, Node 22, HyperFrames, Chrome, la transcription, le modèle
+de langue et les clés facultatives, puis donne la commande exacte pour corriger chaque point manquant.
 
 ---
 
@@ -133,7 +138,13 @@ npx hyperframes --version
 `clients/mon-client.json` et l'adapter : nom, couleur de marque, noms propres, appel à l'action,
 carte de fin.
 
-**2. Un projet.** Placer les rushs et décrire le lot :
+**2. Un projet.** Le créer d'un coup à partir d'un dossier de rushs (un sujet par fichier) :
+
+```bash
+.venv/bin/python pipeline/nouveau_projet.py mon-projet --client mon-client --mois 2026-11 ~/Videos/tournage-novembre
+```
+
+ou le préparer à la main :
 
 ```
 work/mon-projet/
@@ -201,11 +212,22 @@ LLM_MODEL=qwen3:32b
 Un modèle trop petit suit mal la consigne (index de mots, pages de 3 mots) ; l'édito est alors refusé
 avec un message d'erreur. Un modèle de la classe Sonnet, Gemini Pro ou GPT-4.1 est recommandé.
 
-### Les autres réglages
+### Les clés facultatives
+
+| Variable | Sert à | Sans elle |
+|---|---|---|
+| `PEXELS_API_KEY` | b-roll de banque ([clé gratuite](https://www.pexels.com/api/)) | seulement le b-roll du client |
+| `ELEVENLABS_API_KEY` | voix off, effets sonores, musique, jingles (`generer.py voix / son / musique`) | sons de la banque et vos fichiers |
+| `ELEVENLABS_VOICE_ID` | voix par défaut des voix off | préciser `--voix` à chaque fois |
+| `OPENAI_API_KEY` | édito si `LLM_PROVIDER=openai` ; images (gpt-image-1) et vidéos (Sora) de b-roll | pas de génération OpenAI |
+| `GEMINI_API_KEY` | édito si `LLM_PROVIDER=gemini` ; images et vidéos (Veo) de b-roll | pas de génération Gemini |
+| `IMAGE_PROVIDER`, `IMAGE_MODEL` | fournisseur d'images de b-roll : `openai` (défaut) ou `gemini` | |
+| `VIDEO_GEN_PROVIDER`, `VIDEO_MODEL` | fournisseur de vidéos de b-roll : `gemini` (défaut) ou `openai` | |
+
+### La machine
 
 | Variable | Rôle |
 |---|---|
-| `PEXELS_API_KEY` | b-roll de banque ([clé gratuite](https://www.pexels.com/api/)) ; sans clé, seulement le b-roll du client |
 | `VIDEO_ENCODER` | `videotoolbox`, `nvenc` ou `x264` pour forcer l'encodeur |
 | `WHISPER_BACKEND` | `mlx` ou `faster` pour forcer la transcription |
 | `WHISPER_MODEL` | modèle Whisper (`large-v3-turbo` par défaut ; `medium` ou `small` sur une machine lente) |
@@ -267,7 +289,10 @@ Chaque reel a un plan de montage, `work/<projet>/<sujet>/edit.json`. On le modif
 
 | Script | Usage |
 |---|---|
+| `pipeline/diagnostic.py [--rapide]` | vérifie l'installation et les clés, dit quoi corriger |
+| `pipeline/nouveau_projet.py <projet> --client C --mois AAAA-MM <rushs>` | crée un projet à partir d'un dossier de rushs |
 | `pipeline/rendre.py <projet> <sujet>` | monte un sujet ; `--broll`, `--jusqua <étape>`, `--tous`, `--llm`, `--model`, `--verbeux` |
+| `pipeline/generer.py voix / son / musique / image / video` | génère par IA une voix off, un effet sonore, une musique, une image ou une vidéo de b-roll |
 | `pipeline/controle.py <projet> <sujet> [--ecoute]` | durée, LUFS, planche de contact, retranscription du montage |
 | `pipeline/plan.py <projet> <sujet>` | transcription indexée, texte gardé, coupes, b-roll |
 | `pipeline/ecouter.py <projet> <sujet> <début> <fin>` | enveloppe sonore et mots horodatés d'un passage, pour placer une coupe |
@@ -278,6 +303,37 @@ Chaque reel a un plan de montage, `work/<projet>/<sujet>/edit.json`. On le modif
 | `pipeline/fusion_elisions.py <projet> <sujet>` | recolle les élisions séparées par Whisper |
 | `pipeline/planche_clips.py <dossier> [pas]` | planche de vignettes d'un dossier de clips |
 | `pipeline/reel.py` | le pipeline brut, sans projet (`--help`) |
+
+### Son, musique et mixage
+
+- **Musique** : `"musique": {"fichier": "..."}` dans le profil client ; avec `"mix": {"ducking": true}`,
+  elle baisse d'elle-même sous la voix et remonte dans les pauses.
+- **Vos effets sonores** : déposez des `.mp3` ou `.wav` dans [`sons/`](sons/README.md) (ou
+  `work/<client>/assets/sons/`) ; ils s'utilisent par leur nom dans `edit.json` :
+  `"sons": [{"mot": 57, "fichier": "caisse"}]`.
+- **Volume** : `"mix"` règle la musique sous la voix et sur la carte de fin, le volume des effets et
+  le volume final. Détails dans [docs/EDIT.md](docs/EDIT.md#mixage--mix).
+
+### Cartes
+
+- **Carte de fin** : `"carte_fin": {"type": "auto"}` la génère à partir du profil (logo, phrase,
+  téléphone, adresse, site) ; `{"type": "video", "fichier": "..."}` prend une vidéo fournie.
+- **Cartes de titre** : `"cartes": [{"mot": 359, "titre": "Question 2"}]` dans `edit.json`.
+
+### Générer ce qui manque
+
+```bash
+python pipeline/generer.py voix --liste --recherche french
+python pipeline/generer.py voix "Vous cherchez un plancher pour votre sous-sol?" --sortie work/mon-client/assets/voix/question.mp3
+python pipeline/generer.py son "petit ding de caisse enregistreuse" --nom caisse --duree 1
+python pipeline/generer.py musique "lo-fi chaleureux, guitare douce, sans voix" --sortie work/mon-client/assets/musique/lofi.mp3 --duree 30
+python pipeline/generer.py image "sous-sol inondé, eau sur un plancher de bois" --client mon-client --nom sous-sol
+python pipeline/generer.py video "enfant qui souffle les bougies d'un gâteau" --client mon-client --nom bougies
+```
+
+Une image ou une vidéo générée rejoint le b-roll du client sous l'id `gen-<nom>` (`"source":
+"local:gen-sous-sol"`). À réserver aux moments qu'aucun vrai plan ne montre, et jamais pour un produit
+du client, qui se montre avec sa vraie photo. Ces générations sont payantes chez chaque fournisseur.
 
 ### Le b-roll du client
 
@@ -331,6 +387,7 @@ le lit par `CLAUDE.md`, Gemini CLI par `GEMINI.md`, Codex et Cursor directement.
 
 | Symptôme | Cause et solution |
 |---|---|
+| Quelque chose ne marche pas | lancer `pipeline/diagnostic.py` : il dit quoi corriger |
 | `HyperFrames demande Node.js 22 ou plus` | installer Node 22 (`nvm install 22`, ou `winget install OpenJS.NodeJS.LTS`) |
 | `claude -p a échoué` | faire `claude login`, ou passer à un autre fournisseur (`LLM_PROVIDER`) |
 | `<CLÉ> manquante pour le fournisseur` | remplir la clé dans `.env` |
@@ -338,6 +395,8 @@ le lit par `CLAUDE.md`, Gemini CLI par `GEMINI.md`, Codex et Cursor directement.
 | Transcription très lente | sans GPU, prendre `WHISPER_MODEL=small` ou `medium` |
 | Image orange ou magenta | rush S-Log mal détecté : mettre `"lut": "none"` dans `sujets.json` et régler `grade` |
 | Image couchée | mettre `"rotation": "cw"` ou `"ccw"` dans `sujets.json` |
+| `son « x » introuvable` | le fichier `x.mp3` ou `x.wav` n'est ni dans `sons/` ni dans `assets/sons/` du client |
+| `/v1/music a répondu 404` | ElevenLabs a changé ce point d'accès : voir la note dans `pipeline/generer.py` |
 | Un mot manque dans le montage | `ecouter.py` sur le passage, recaler le mot dans `words.json` ou couper en secondes |
 
 ---

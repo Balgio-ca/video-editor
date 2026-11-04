@@ -23,8 +23,9 @@ import projet as P  # noqa: E402
 from plateforme import transcrire  # noqa: E402
 from reel import load_envelope  # noqa: E402
 
-if len(sys.argv) < 5:
-    sys.exit(__doc__)
+if len(sys.argv) < 5 or sys.argv[1] in ("-h", "--help"):
+    print(__doc__)
+    sys.exit(0 if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help") else 1)
 projet, slug, t0, t1 = sys.argv[1], sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
 pas = float(sys.argv[sys.argv.index("--pas") + 1]) if "--pas" in sys.argv else 0.03
 w = P.dossier(projet) / slug

@@ -10,16 +10,25 @@
   "telephone": "450 555-0123",
   "site": "planchers-exemple.ca",
   "cta_defaut": "Passe nous voir au 123, rue Exemple à Laval.",
-  "mots_interdits": ["meilleur au Québec", "garanti à vie"],
-  "noms_propres": ["Planchers Exemple", "Laval", "Toucan", "vinyle SPC"],
+  "mots_interdits": [
+    "meilleur au Québec",
+    "garanti à vie"
+  ],
+  "noms_propres": [
+    "Planchers Exemple",
+    "Laval",
+    "Toucan",
+    "vinyle SPC"
+  ],
   "broll": {
     "local": "work/exemple-plancher/assets/broll",
     "pexels_permis": true,
     "pexels_contexte": "hardwood flooring, flooring store, home renovation, floor installation"
   },
   "carte_fin": {
-    "type": "video",
-    "fichier": "work/exemple-plancher/assets/END-CARD.mp4"
+    "type": "auto",
+    "duree": 3.0,
+    "fond": "#111111"
   },
   "musique": {
     "fichier": "",
@@ -31,5 +40,9 @@
   "carte_fin_en": {
     "type": "video",
     "fichier": "work/exemple-plancher/assets/END-CARD-EN.mp4"
+  },
+  "logo": "work/exemple-plancher/assets/logo.png",
+  "mix": {
+    "ducking": true
   }
 }

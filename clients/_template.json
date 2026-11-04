@@ -22,13 +22,26 @@
     "pexels_contexte": "mots-clés anglais qui décrivent le métier, pour Pexels"
   },
   "carte_fin": {
-    "type": "video",
-    "fichier": "chemin vers une carte de fin existante, ou vide"
+    "type": "auto",
+    "duree": 3.0,
+    "fond": "#000000",
+    "texte": "phrase de la carte (sinon cta_defaut)",
+    "telephone": true,
+    "adresse": true,
+    "site": true
   },
   "musique": {
-    "fichier": "chemin vers une boucle ou un morceau libre de droits, ou vide",
+    "fichier": "chemin vers une musique libre de droits, ou vide",
     "gain_voix": 0.08,
     "gain_fin": 0.55
   },
-  "cta_court": "Appel à l'action court à l'écran, un *mot* en couleur"
+  "cta_court": "Appel à l'action court à l'écran, un *mot* en couleur",
+  "logo": "chemin vers le logo (PNG transparent), utilisé par la carte de fin automatique",
+  "mix": {
+    "lufs": -14,
+    "ducking": true,
+    "musique_voix": 0.4,
+    "musique_fin": 0.55,
+    "effets": 1.0
+  }
 }

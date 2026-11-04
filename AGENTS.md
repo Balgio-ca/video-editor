@@ -9,10 +9,14 @@ scripts, regarde le résultat, retouche `edit.json` et relance. Ce fichier dit c
 
 1. Lire [README.md](README.md) (installation, commandes), [docs/EDIT.md](docs/EDIT.md) (tous les
    réglages de retouche) et [STANDARDS.md](STANDARDS.md) (règles de qualité).
-2. Vérifier l'installation : `python pipeline/reel.py --help` dans le `.venv`, `ffmpeg -version`,
-   `node --version` (22 ou plus).
+2. Lancer `python pipeline/diagnostic.py` (avec le Python du `.venv`) et corriger chaque point
+   « À FAIRE » avec la commande qu'il donne, avant toute autre chose.
 3. Un lot de reels = un projet `work/<projet>/` avec `sujets.json`, un dossier par sujet et ses
-   rushs dans `<sujet>/src/`. Le profil du client est dans `clients/<client>.json`.
+   rushs dans `<sujet>/src/`. Le profil du client est dans `clients/<client>.json` (partir de
+   `clients/_template.json` ; demander à la personne le nom, la couleur, l'adresse, le téléphone,
+   les noms propres et l'appel à l'action plutôt que de les inventer).
+4. Pour un nouveau dossier de rushs : `python pipeline/nouveau_projet.py <projet> --client <client>
+   --mois AAAA-MM <dossier>`, puis remplir le `brief.txt` de chaque sujet si la personne a donné des consignes.
 
 ## Le cycle de travail
 
@@ -85,6 +89,32 @@ fraîche du passage. La voix est au-dessus de 0,3 ; un souffle ou un murmure ver
 - **Couleur** : image naturelle, pas saturée. Un rush S-Log mal éclairé se garde plat (`"lut": "none"`)
   avec un léger `grade` manuel plutôt qu'une LUT qui donne des couleurs criardes.
 - Les autocollants et les images ajoutés doivent être libres de droits.
+
+## Habillage et son
+
+- Sons posés à la main : `"sons"` dans `edit.json`, par nom de fichier (banque fournie, `sons/`,
+  `assets/sons/` du client). Un son par moment fort, pas plus : le pipeline en pose déjà sur les
+  b-roll et les encadrés.
+- Cartes de titre (`"cartes"`) pour séparer les parties d'un reel en plusieurs questions ou étapes.
+- Carte de fin : `"carte_fin": {"type": "auto"}` dans le profil si le client n'a pas de vidéo de fin.
+- Musique : toujours sous la voix ; `"mix": {"ducking": true}` la fait s'effacer pendant la parole.
+  Vérifier à l'écoute qu'on comprend chaque mot. Une musique qui monte en fin de reel sonne gabarit :
+  garder un niveau stable avec un seul fondu de sortie.
+
+## Générer par IA
+
+`pipeline/generer.py` crée une voix off, un effet sonore, une musique (ElevenLabs), une image ou une
+vidéo de b-roll (OpenAI, Gemini).
+
+- Ces générations coûtent de l'argent chez le fournisseur : **annoncer ce qui sera généré et attendre
+  l'accord de la personne** avant de lancer, sauf si elle l'a déjà demandé explicitement.
+- Ordre de préférence pour le b-roll : clip ou photo du client, photo de son catalogue, Pexels choisi
+  à l'œil, et seulement ensuite une image ou une vidéo générée.
+- **Jamais** d'image générée pour un produit, un lieu ou une personne réels du client : ce serait
+  trompeur. Une image générée illustre une situation générale (un sous-sol inondé, une fête d'enfant).
+- Pour un jingle de 2-3 s, `generer.py son` réussit mieux que `generer.py musique`.
+- Une image générée devient `local:gen-<nom>` ; la regarder avant de l'utiliser (texte illisible,
+  mains déformées, éléments incohérents = la refaire ou s'en passer).
 
 ## Ce qu'il ne faut pas faire
 

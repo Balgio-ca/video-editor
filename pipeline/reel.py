@@ -395,7 +395,7 @@ def step_edito(words_json: Path, work: Path, profile: dict, brief: str, model: s
     mots = "\n".join(f'{w["i"]}\t{w["text"]}\t{w["start"]:.2f}\t{w["end"]:.2f}' for w in words)
     profil = json.dumps({k: profile[k] for k in profile if k not in ("broll", "carte_fin")},
                         ensure_ascii=False, indent=1)
-    index = load_broll_index(work)
+    index = load_broll_index(work, profile)
     broll_local = "\n".join(f'- local:{b["id"]} ({b["type"]}{", " + str(b["duree"]) + " s" if b.get("duree") else ""}) : {b["description"]}'
                             for b in index) or "(aucun)"
     langue = "anglais" if str(profile.get("langue", "fr")).lower().startswith("en") else "français du Québec"
@@ -428,22 +428,35 @@ def pick_file(video: dict) -> dict | None:
     return sorted(files, key=lambda f: f["width"])[0]  # le plus petit >= 1080
 
 
-def load_broll_index(work: Path) -> list[dict]:
-    """B-roll fourni par le client : work/<client>/assets/broll/index.json (fichiers à côté)."""
-    p = work.parent / "assets" / "broll" / "index.json"
-    if not p.exists():
-        return []
-    items = json.loads(p.read_text())
-    for b in items:
-        b["path"] = str(p.parent / b["file"])
-    # photos de produits du site du client (assets/produits/index.json) : un plancher nommé
-    # se montre avec sa vraie photo, jamais avec un plancher générique
-    q = work.parent / "assets" / "produits" / "index.json"
-    if q.exists():
-        for x in json.loads(q.read_text()):
-            if x.get("fichiers"):
-                items.append({"id": x["id"], "file": x["fichiers"][0], "type": "photo", "description": x["nom"],
-                              "tags": x.get("tags", []), "path": str(q.parent / x["fichiers"][0])})
+def dossiers_assets(work: Path, profile: dict | None = None) -> list[Path]:
+    """Dossiers d'assets d'un sujet : celui du projet (work/<projet>/assets) puis celui du client (work/<client>/assets)."""
+    cands = [work.parent / "assets"] + ([ROOT / "work" / profile["id"] / "assets"] if profile and profile.get("id") else [])
+    out = []
+    for d in cands:
+        if d.exists() and d.resolve() not in [x.resolve() for x in out]:
+            out.append(d)
+    return out
+
+
+def load_broll_index(work: Path, profile: dict | None = None) -> list[dict]:
+    """B-roll fourni par le client : <assets>/broll/index.json (fichiers à côté), et photos du catalogue."""
+    items, vus = [], set()
+    for a in dossiers_assets(work, profile):
+        p = a / "broll" / "index.json"
+        if p.exists():
+            for b in json.loads(p.read_text()):
+                if b["id"] not in vus:
+                    vus.add(b["id"])
+                    items.append(dict(b, path=str(p.parent / b["file"])))
+        # photos de produits du site du client (assets/produits/index.json) : un produit nommé
+        # se montre avec sa vraie photo, jamais avec une image générique
+        q = a / "produits" / "index.json"
+        if q.exists():
+            for x in json.loads(q.read_text()):
+                if x.get("fichiers") and x["id"] not in vus:
+                    vus.add(x["id"])
+                    items.append({"id": x["id"], "file": x["fichiers"][0], "type": "photo", "description": x["nom"],
+                                  "tags": x.get("tags", []), "path": str(q.parent / x["fichiers"][0])})
     return items
 
 
@@ -459,7 +472,7 @@ def step_broll(edit_json: Path, words_json: Path, work: Path, profile: dict) -> 
     api_key = os.environ.get("PEXELS_API_KEY", "")
     used_ids: set = set()
     result = []
-    index = {b["id"]: b for b in load_broll_index(work)}
+    index = {b["id"]: b for b in load_broll_index(work, profile)}
     wins = sorted(edit.get("broll", []), key=lambda x: words[x["debut_mot"]]["start"])
     spans = [(words[x["debut_mot"]]["start"], words[x["fin_mot"]]["end"]) for x in wins]
     # « duree » dans la fenêtre fixe la durée (sinon 2,2 à 4,5 s selon les mots couverts)
@@ -582,6 +595,21 @@ def broll_preview(result: list, bdir: Path, work: Path) -> None:
 
 # ---------------------------------------------------------------------- 6. compose
 SFX_DIR = ROOT / "node_modules/hyperframes/dist/skills/media-use/audio/assets/sfx"
+SONS_DIR = ROOT / "sons"  # effets sonores ajoutés par l'utilisateur, appelés par leur nom
+SON_EXT = (".mp3", ".wav", ".m4a", ".ogg")
+
+
+def trouver_son(nom: str, work: Path | None = None, profile: dict | None = None) -> Path | None:
+    """Fichier d'un effet sonore par son nom : assets/sons du projet ou du client, puis sons/, puis la banque fournie."""
+    dossiers = [a / "sons" for a in dossiers_assets(work, profile)] if work else []
+    for d in dossiers + [SONS_DIR, SFX_DIR]:
+        for ext in SON_EXT:
+            f = d / f"{nom}{ext}"
+            if f.exists():
+                return f
+    return None
+
+
 SFX_VOL = {"whoosh-short": 0.30, "whoosh": 0.28, "pop": 0.22, "impact-bass-1": 0.30, "click-soft": 0.18, "ping": 0.35, "chime": 0.35}
 
 
@@ -1026,9 +1054,15 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
 
     tweens, sfx = [], []
 
-    def cue(name: str, t: float) -> None:
-        if (SFX_DIR / f"{name}.mp3").exists() and t >= 0:
-            sfx.append((name, t))
+    mix = {**(profile.get("mix") or {}), **(edit.get("mix") or {})}
+    gain_effets = float(mix.get("effets", 1.0))
+
+    def cue(name: str, t: float, volume: float | None = None, force: bool = False) -> None:
+        f = trouver_son(name, work, profile)
+        if f and t >= 0:
+            sfx.append((name, t, f, volume, force))
+        elif not f:
+            log(f"son « {name} » introuvable (sons/, assets/sons/ ou la banque fournie)")
 
     # --- mouvement de la tête parlante : une seule piste d'échelle, sans chevauchement.
     # Événements : coupe (recadrage alterné), punch, impact, retour de b-roll. Entre deux
@@ -1232,6 +1266,30 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
             cue("whoosh-short", t0 - 0.04)
             cue(vsfx, t0 + 0.12)
 
+    # --- cartes de titre plein écran : edit.json "cartes": [{"mot": 359, "titre": "Question 2", "sous_titre": "..."}]
+    for n, ca in enumerate(edit.get("cartes", [])):
+        if "t" in ca:
+            t0 = float(ca["t"])
+        elif int(ca["mot"]) < len(words) and int(ca["mot"]) not in cut_set(edit):
+            t0 = max(0.0, tmap(words[int(ca["mot"])]["start"]) - 0.1)
+        else:
+            continue
+        cdur = float(ca.get("duree", 1.6))
+        fond = ca.get("fond", profile.get("couleur_marque", "#111111"))
+        sous = f'<div class="ca-s">{html_escape(ca["sous_titre"])}</div>' if ca.get("sous_titre") else ""
+        sticker_html.append(f'      <div id="ca{n}" class="clip carte" data-start="{t0:.3f}" data-duration="{cdur:.3f}" data-track-index="8" '
+                            f'style="--cf:{fond}; --ct:{ca.get("couleur", "#FFFFFF")}"><div class="ca-bg"></div>'
+                            f'<div class="ca-in"><div class="ca-t">{html_escape(ca.get("titre", ""))}</div>{sous}</div></div>')
+        sel = f"#ca{n}"
+        tweens.append(f'      tl.fromTo("{sel} .ca-bg", {{yPercent: 100}}, {{yPercent: 0, duration: 0.28, ease: "power3.out"}}, {t0:.3f});')
+        tweens.append(f'      tl.fromTo("{sel} .ca-t", {{y: 60, opacity: 0}}, {{y: 0, opacity: 1, duration: 0.32, ease: "back.out(1.8)"}}, {t0 + 0.14:.3f});')
+        if sous:
+            tweens.append(f'      tl.fromTo("{sel} .ca-s", {{y: 30, opacity: 0}}, {{y: 0, opacity: 1, duration: 0.3, ease: "power2.out"}}, {t0 + 0.28:.3f});')
+        tweens.append(f'      tl.to("{sel} .ca-in", {{opacity: 0, y: -40, duration: 0.2, ease: "power2.in"}}, {t0 + cdur - 0.24:.3f});')
+        tweens.append(f'      tl.to("{sel} .ca-bg", {{yPercent: -100, duration: 0.24, ease: "power3.in"}}, {t0 + cdur - 0.24:.3f});')
+        if ca.get("sfx", True):
+            cue(ca.get("son", "whoosh"), t0 - 0.04)
+
     # --- accroche
     hook = ""
     acc = edit.get("accroche") or {}
@@ -1264,7 +1322,7 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
             src = work / "broll" / b["file"]
         else:
             # photo locale : chemin mémorisé, sinon retrouvée dans l'index (banque broll ou produits du site)
-            src = Path(b["path"]) if b.get("path") else next((Path(x["path"]) for x in load_broll_index(work) if x["file"] == b["file"]),
+            src = Path(b["path"]) if b.get("path") else next((Path(x["path"]) for x in load_broll_index(work, profile) if x["file"] == b["file"]),
                                                               work.parent / "assets" / "broll" / b["file"])
         if vf_grade and b.get("type", "video") == "video" and str(b.get("origin", "")).startswith("local:"):
             graded = work / "broll" / b["file"].replace(".mp4", "_grade.mp4")
@@ -1298,24 +1356,37 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
     endcard_html = ""
     total = talk_dur
     ec_cfg = profile.get("carte_fin") or {}
-    if ec_cfg.get("type") == "logo" and ec_cfg.get("fichier"):
-        logo = (ROOT / ec_cfg["fichier"]).resolve() if not Path(ec_cfg["fichier"]).is_absolute() else Path(ec_cfg["fichier"])
-        if logo.exists():
-            name = link(logo, "logo" + logo.suffix)
-            ec_dur = float(ec_cfg.get("duree", 3.0))
-            fond = ec_cfg.get("fond", "#000000")
-            ligne = html_escape(ec_cfg.get("texte", profile.get("cta_defaut", "")))
-            endcard_html = (
-                f'      <div id="endcard" class="clip" data-start="{talk_dur:.3f}" data-duration="{ec_dur:.3f}" data-track-index="2" '
-                f'style="background:{fond}; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:60px;">'
-                f'<img id="endlogo" src="{name}" style="width:84%; max-height:40%; object-fit:contain;" />'
-                f'<div id="endtext" style="color:#fff; font-weight:700; font-size:44px; text-align:center; padding:0 90px; letter-spacing:-0.01em;">{ligne}</div></div>'
-            )
+    if ec_cfg.get("type") in ("logo", "auto"):
+        # carte générée : logo (facultatif), nom, phrase, téléphone en couleur de marque, adresse, site
+        lf = ec_cfg.get("logo") or (ec_cfg.get("fichier") if ec_cfg.get("type") == "logo" else "") or profile.get("logo", "")
+        logo = ((ROOT / lf) if not Path(lf).is_absolute() else Path(lf)) if lf else None
+        name = link(logo, "logo" + logo.suffix) if logo and logo.exists() else ""
+        ec_dur = float(ec_cfg.get("duree", 3.0))
+        fond = ec_cfg.get("fond", "#000000")
+        coul = profile.get("couleur_marque", "#FFFFFF")
+        txt = ec_cfg.get("couleur_texte", "#FFFFFF")
+        lignes = []
+        if not name:
+            lignes.append(f'<div class="ecl" style="font-size:78px; font-weight:900; letter-spacing:-0.02em;">{html_escape(profile.get("nom", ""))}</div>')
+        phrase = ec_cfg.get("texte", profile.get("cta_defaut", ""))
+        if phrase:
+            lignes.append(f'<div class="ecl" style="font-size:44px; font-weight:700;">{html_escape(phrase)}</div>')
+        if ec_cfg.get("telephone", True) and profile.get("telephone"):
+            lignes.append(f'<div class="ecl" style="font-size:88px; font-weight:900; color:{coul}; letter-spacing:-0.01em;">{html_escape(profile["telephone"])}</div>')
+        for k in ("adresse", "site"):
+            if ec_cfg.get(k, True) and profile.get(k):
+                lignes.append(f'<div class="ecl" style="font-size:38px; font-weight:600; opacity:0.85;">{html_escape(profile[k])}</div>')
+        img = f'<img id="endlogo" src="{name}" style="width:78%; max-height:34%; object-fit:contain;" />' if name else ""
+        endcard_html = (
+            f'      <div id="endcard" class="clip carte-fin" data-start="{talk_dur:.3f}" data-duration="{ec_dur:.3f}" data-track-index="2" '
+            f'style="background:{fond}; color:{txt};"><div class="cf-in">{img}{"".join(lignes)}</div></div>'
+        )
+        if name:
             tweens.append(f'      tl.fromTo("#endlogo", {{scale: 0.86, opacity: 0}}, {{scale: 1, opacity: 1, duration: 0.5, ease: "power3.out"}}, {talk_dur:.3f});')
-            tweens.append(f'      tl.fromTo("#endtext", {{y: 24, opacity: 0}}, {{y: 0, opacity: 1, duration: 0.45, ease: "power2.out"}}, {talk_dur + 0.35:.3f});')
-            cue("whoosh", talk_dur - 0.12)
-            total = talk_dur + ec_dur
-            endcard = None
+        tweens.append(f'      tl.fromTo("#endcard .ecl", {{y: 28, opacity: 0}}, {{y: 0, opacity: 1, duration: 0.4, ease: "power2.out", stagger: 0.12}}, {talk_dur + 0.25:.3f});')
+        cue("whoosh", talk_dur - 0.12)
+        total = talk_dur + ec_dur
+        endcard = None
     if endcard and endcard.exists():
         ec_small = work / "endcard_1080.mp4"
         if not ec_small.exists():
@@ -1339,16 +1410,28 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
             loop = ROOT / loop
         if loop.exists():
             m = work / "music.m4a"
-            g_voice, g_end = float(mus.get("gain_voix", 0.08)), float(mus.get("gain_fin", 0.55))
+            ducking = bool(mix.get("ducking", False))
+            # niveau de la musique sous la voix et sur la carte de fin (mix > profil musique > défaut) ;
+            # avec le ducking, la musique peut être plus haute : elle s'efface d'elle-même sous la voix
+            g_voice = float(mix.get("musique_voix", 0.4 if ducking else mus.get("gain_voix", 0.08)))
+            g_end = float(mix.get("musique_fin", mus.get("gain_fin", 0.55)))
             t_end = talk_dur if endcard_html else total
-            # 1) boucle normalisée à -18 LUFS ; 2) répétée et coupée à la durée ; 3) enveloppe + fondus
+            # 1) boucle normalisée ; 2) répétée et coupée à la durée ; 3) enveloppe + fondus ; 4) ducking
             loop_dur = probe(loop)["duration"]
             reps = int(total / max(loop_dur, 1.0)) + 2
-            sh(["ffmpeg", "-v", "error", "-y", "-stream_loop", str(reps), "-i", loop, "-t", f"{total + 0.5:.3f}",
-                "-af", f"loudnorm=I=-18:TP=-2:LRA=9,"
-                       f"volume='{g_voice}+({g_end}-{g_voice})*min(max((t-{t_end:.3f})/0.6,0),1)':eval=frame,"
-                       f"afade=t=in:st=0:d=0.8,afade=t=out:st={max(0.0, total - 1.6):.3f}:d=1.5",
-                "-ac", "2", "-ar", "48000", "-c:a", "aac", "-b:a", "160k", m])
+            chaine = (f"loudnorm=I={float(mix.get('musique_lufs', -18))}:TP=-2:LRA=9,"
+                      f"volume='{g_voice}+({g_end}-{g_voice})*min(max((t-{t_end:.3f})/0.6,0),1)':eval=frame,"
+                      f"afade=t=in:st=0:d=0.8,afade=t=out:st={max(0.0, total - 1.6):.3f}:d=1.5")
+            if ducking:
+                sh(["ffmpeg", "-v", "error", "-y", "-stream_loop", str(reps), "-i", loop, "-i", talk,
+                    "-filter_complex", f"[0:a]atrim=end={total + 0.5:.3f},{chaine},aformat=channel_layouts=stereo[m];"
+                    f"[1:a]aformat=channel_layouts=stereo,apad[v];"
+                    f"[m][v]sidechaincompress=threshold={float(mix.get('ducking_seuil', 0.05))}:ratio={float(mix.get('ducking_ratio', 3))}"
+                    f":attack=20:release=350[out]",
+                    "-map", "[out]", "-t", f"{total + 0.5:.3f}", "-ar", "48000", "-c:a", "aac", "-b:a", "160k", m])
+            else:
+                sh(["ffmpeg", "-v", "error", "-y", "-stream_loop", str(reps), "-i", loop, "-t", f"{total + 0.5:.3f}",
+                    "-af", chaine, "-ac", "2", "-ar", "48000", "-c:a", "aac", "-b:a", "160k", m])
             name = link(m, "music.m4a")
             music_html = f'      <audio id="music" src="{name}" data-start="0" data-duration="{total:.3f}" data-volume="1" data-track-index="9"></audio>'
         else:
@@ -1356,18 +1439,29 @@ def step_compose(work: Path, profile: dict, edit_json: Path, words_json: Path, b
 
     # --- effets sonores : chaque effet accompagne un mouvement visible, jamais deux effets à moins de
     #     1,1 s (priorité : impact > b-roll et recadrages > pops), plafond d'un effet par 3,5 s de vidéo
-    prio = {"impact-bass-1": 0, "ping": 0, "chime": 0, "whoosh": 0, "whoosh-short": 1, "pop": 2, "click-soft": 3}
-    kept = []
-    for name, at in sorted(sfx, key=lambda x: (prio.get(x[0], 9), x[1])):
-        if at < 0 or any(abs(at - t2) < 1.1 for _, t2 in kept):
+    #     Les sons posés à la main dans edit.json ("sons") passent toujours.
+    for so in edit.get("sons", []):
+        if "t" in so:
+            at = float(so["t"])
+        elif int(so["mot"]) < len(words) and int(so["mot"]) not in cut_set(edit):
+            at = tmap(words[int(so["mot"])]["start"])
+        else:
             continue
-        kept.append((name, at))
+        cue(so["fichier"], at + float(so.get("decalage", 0.0)), so.get("volume"), force=True)
+    prio = {"impact-bass-1": 0, "ping": 0, "chime": 0, "whoosh": 0, "whoosh-short": 1, "pop": 2, "click-soft": 3}
+    forces = [x for x in sfx if x[4]]
+    kept = []
+    for x in sorted((x for x in sfx if not x[4]), key=lambda x: (prio.get(x[0], 9), x[1])):
+        if x[1] < 0 or any(abs(x[1] - y[1]) < 1.1 for y in kept + forces):
+            continue
+        kept.append(x)
     budget = max(3, int(total / 3.5))
-    kept = sorted(kept, key=lambda x: (prio.get(x[0], 9), x[1]))[:budget]
+    kept = sorted(kept, key=lambda x: (prio.get(x[0], 9), x[1]))[:budget] + forces
     sfx_html = []
-    for n, (name, at) in enumerate(sorted(kept, key=lambda x: x[1])):
-        shutil.copy2(SFX_DIR / f"{name}.mp3", comp / "sfx" / f"{name}.mp3")
-        sfx_html.append(f'      <audio id="sfx{n}" src="sfx/{name}.mp3" data-start="{at:.3f}" data-volume="{SFX_VOL.get(name, 0.3)}" data-track-index="8"></audio>')
+    for n, (name, at, f, vol, _) in enumerate(sorted(kept, key=lambda x: x[1])):
+        shutil.copy2(f, comp / "sfx" / f.name)
+        v = (float(vol) if vol is not None else SFX_VOL.get(name, 0.3)) * gain_effets
+        sfx_html.append(f'      <audio id="sfx{n}" src="sfx/{f.name}" data-start="{at:.3f}" data-volume="{v:.3f}" data-track-index="8"></audio>')
 
     html = (TEMPLATE_DIR / "index.template.html").read_text()
     repl = {
@@ -1418,8 +1512,13 @@ def step_render(comp: Path, work: Path, profile: dict, title_slug: str, mois: st
         while (OUT_DIR / profile["id"] / f"{mois}_{title_slug}_V{n}.mp4").exists():
             n += 1
         final = OUT_DIR / profile["id"] / f"{mois}_{title_slug}_V{n}.mp4"
+    # cible de volume : -14 LUFS (Instagram, TikTok) sauf réglage "mix.lufs" du profil ou d'edit.json
+    e_mix = {}
+    if (work / "edit.json").exists():
+        e_mix = json.loads((work / "edit.json").read_text()).get("mix") or {}
+    lufs = float({**(profile.get("mix") or {}), **e_mix}.get("lufs", -14))
     sh(["ffmpeg", "-v", "error", "-y", "-i", raw,
-        "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+        "-af", f"loudnorm=I={lufs}:TP=-1.5:LRA=11",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-movflags", "+faststart", final])
     # planche de contact pour la révision
     sheet = final.with_suffix(".planche.jpg")
@@ -1460,7 +1559,8 @@ def main() -> None:
         profile["carte_fin"] = profile.get("carte_fin_en", profile.get("carte_fin"))
     work = args.work.resolve()
     work.mkdir(parents=True, exist_ok=True)
-    brief = args.brief.read_text() if args.brief and args.brief.exists() else ""
+    brief = args.brief.read_text(encoding="utf-8") if args.brief and args.brief.exists() else ""
+    brief = "\n".join(l for l in brief.splitlines() if not l.lstrip().startswith("#")).strip()  # lignes # = commentaires
     last = STEPS.index(args.jusqua)
 
     if (work / "rush_cut.mp4").exists():

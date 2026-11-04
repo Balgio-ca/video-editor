@@ -234,3 +234,88 @@ penche, ressort). N'utiliser que des images dont on a les droits.
 Sans `gamma`, le pipeline calcule la correction pour amener la luminance moyenne à `cible`. Avec
 `gamma`, il l'applique tel quel. `filtre` : n'importe quel filtre FFmpeg appliqué avant. Pour un rush
 S-Log3 à garder plat, mettre `"lut": "none"` dans `sujets.json`.
+
+## Effets sonores posés à la main : `sons`
+
+```json
+"sons": [
+  {"mot": 57, "fichier": "caisse", "volume": 0.4},
+  {"t": 12.5, "fichier": "whoosh-cinematic", "decalage": -0.05}
+]
+```
+
+Le pipeline pose déjà des sons tout seul (whoosh sur un b-roll, pop sur un encadré, verdicts), en
+évitant qu'ils se marchent dessus. Un son de `sons` passe toujours. `fichier` est le nom sans
+extension, cherché dans cet ordre : `work/<projet>/assets/sons/`, `work/<client>/assets/sons/`,
+[`sons/`](../sons/README.md) à la racine, puis la banque fournie (`whoosh`, `whoosh-short`,
+`whoosh-cinematic`, `pop`, `ping`, `chime`, `click`, `click-soft`, `sparkle`, `riser`, `impact-bass-1`,
+`impact-bass-2`, `glitch-1`, `notification`, `typing`...). Le même nom marche dans `stickers` (`sfx`),
+`cartes` (`son`) et les verdicts. Un son se crée avec `python pipeline/generer.py son "description" --nom caisse`.
+
+## Cartes de titre : `cartes`
+
+Un écran plein cadre à la couleur de marque, avec un titre et un sous-titre, pour séparer les parties
+d'un reel (« Question 2 », « Étape 3 », « Avant / après »).
+
+```json
+"cartes": [
+  {"mot": 359, "titre": "Question 2", "sous_titre": "L'ingénierie se sable?"},
+  {"t": 0.0, "titre": "3 erreurs", "sous_titre": "à éviter avant de rénover", "duree": 2.0, "fond": "#111111"}
+]
+```
+
+Options : `duree` (1,6 s), `fond` (couleur de marque), `couleur` du texte (blanc), `son` (`whoosh`),
+`sfx: false` pour aucun son.
+
+## Mixage : `mix`
+
+Le mixage se règle dans le profil client (`"mix"`, pour tous ses reels) ou dans `edit.json` (pour un reel).
+
+```json
+"mix": {"ducking": true, "musique_voix": 0.4, "musique_fin": 0.55, "effets": 0.8, "lufs": -14}
+```
+
+| Clé | Rôle | Défaut |
+|---|---|---|
+| `ducking` | la musique baisse d'elle-même quand quelqu'un parle et remonte dans les pauses | `false` |
+| `musique_voix` | niveau de la musique pendant la parole | 0,08 (0,4 avec le ducking) |
+| `musique_fin` | niveau de la musique sur la carte de fin | 0,55 |
+| `musique_lufs` | normalisation de la musique avant le mixage | -18 |
+| `ducking_seuil`, `ducking_ratio` | sensibilité et force du ducking | 0,05 et 3 |
+| `effets` | multiplie le volume de tous les effets sonores | 1,0 |
+| `lufs` | volume final du reel | -14 (Instagram, TikTok) |
+
+La musique elle-même se choisit dans le profil (`"musique": {"fichier": "..."}`), ou se crée avec
+`python pipeline/generer.py musique "description" --sortie ... --duree 30`.
+
+## Carte de fin générée
+
+Dans le profil client, une carte de fin peut être une vidéo fournie ou se générer à partir du profil :
+
+```json
+"logo": "work/mon-client/assets/logo.png",
+"carte_fin": {"type": "auto", "duree": 3.0, "fond": "#111111", "texte": "Passe nous voir cette semaine"}
+```
+
+La carte générée montre le logo (ou le nom du client sans logo), la phrase (`texte`, sinon
+`cta_defaut`), le téléphone en couleur de marque, l'adresse et le site, avec une entrée animée.
+`"telephone": false`, `"adresse": false` ou `"site": false` retirent une ligne. Pour une vidéo
+fournie : `{"type": "video", "fichier": "work/mon-client/assets/END-CARD.mp4"}`.
+
+## Médias générés par IA
+
+Quand aucun plan du client ni de Pexels ne montre ce qui est dit, `pipeline/generer.py` crée le média
+et l'ajoute au b-roll du client :
+
+```bash
+python pipeline/generer.py image "sous-sol inondé, eau sur un plancher de bois" --client mon-client --nom sous-sol
+python pipeline/generer.py video "enfant qui souffle les bougies d'un gâteau" --client mon-client --nom bougies
+```
+
+```json
+"broll": [{"debut_mot": 256, "fin_mot": 259, "source": "local:gen-sous-sol"}]
+```
+
+Une image générée s'anime en lent zoom, comme toute photo. Ne jamais générer un produit du client :
+un produit nommé se montre avec sa vraie photo. Pour une voix off ou une question enregistrée :
+`python pipeline/generer.py voix "texte" --sortie ...`, puis `preroll` ou `voix_off`.

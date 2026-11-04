@@ -9,7 +9,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 dest = ROOT / "out" / "apercu"
 dest.mkdir(parents=True, exist_ok=True)
-for f in map(Path, sys.argv[1:] or sys.exit(__doc__)):
+if not sys.argv[1:] or sys.argv[1] in ("-h", "--help"):
+    print(__doc__)
+    sys.exit(0 if sys.argv[1:] else 1)
+for f in map(Path, sys.argv[1:]):
     o = dest / f.name
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", f, "-vf", "scale=720:1280", "-c:v", "libx264", "-preset", "fast",
                     "-crf", "23", "-maxrate", "3500k", "-bufsize", "7000k", "-pix_fmt", "yuv420p",

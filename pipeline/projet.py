@@ -30,14 +30,14 @@ def dossier(projet: str) -> Path:
 
 
 def sujets(projet: str) -> dict:
-    data = json.loads((dossier(projet) / "sujets.json").read_text())
+    data = json.loads((dossier(projet) / "sujets.json").read_text(encoding="utf-8"))
     return {k: v for k, v in data.items() if not k.startswith("_")}
 
 
 def sujet(projet: str, slug: str) -> dict:
     """Réglages d'un sujet, complétés par ceux du projet, avec les chemins des rushs résolus."""
     d = dossier(projet)
-    data = json.loads((d / "sujets.json").read_text())
+    data = json.loads((d / "sujets.json").read_text(encoding="utf-8"))
     if slug not in data:
         sys.exit(f"sujet « {slug} » absent de {d / 'sujets.json'}")
     s = {"langue": "fr", "lut": "auto", "rotation": "auto", **data.get("_projet", {}), **data[slug]}
